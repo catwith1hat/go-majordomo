@@ -14,4 +14,5 @@ require (
 	google.golang.org/api v0.93.0
 	google.golang.org/genproto v0.0.0-20220819174105-e9f053255caa
 	gotest.tools v2.2.0+incompatible
+	github.com/edgelesssys/ego v0.4.1
 )

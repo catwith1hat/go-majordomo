@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/edgelesssys/ego/enclave"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -125,6 +126,18 @@ func (s *Service) Fetch(ctx context.Context, url *url.URL) ([]byte, error) {
 			return nil, errors.New("invalid client certificate or key")
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+	if url.EscapedFragment() == "with-sgx-attested-adhoc-cert" {
+		if clientCertExists || clientKeyExists {
+			return nil, errors.New("client certificate nor client key must be specified with SGX")
+
+		}
+		tlsConfigForSgx, err := enclave.CreateAttestationServerTLSConfig()
+		if err != nil {
+			return nil, errors.New("Failed to create SGX attestaton certificate. Not running in Enclave?")
+		}
+		// Take freshly generated private key and certificate.
+		tlsConfig.Certificates = tlsConfigForSgx.Certificates
 	}
 	client := &http.Client{
 		Transport: &http.Transport{

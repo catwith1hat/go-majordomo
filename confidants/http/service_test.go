@@ -124,6 +124,11 @@ func TestFetch(t *testing.T) {
 				&httpconfidant.Body{}:       []byte("test"),
 			},
 		},
+		{
+			name:  "SGX test",
+			key:   "http://localhost:5050/path1#with-sgx-attested-adhoc-cert",
+			value: []byte("response 1"),
+		},
 	}
 
 	for _, test := range tests {
