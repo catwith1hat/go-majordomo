@@ -41,7 +41,9 @@ import (
 // - HTTPMethod the HTTP method, as a string (e.g. http.MethodPost)
 // - MIMEType the MIME type for request and response, as a string (e.g. application/json)
 // - Body the request body, as a byte slice
-type Service struct{}
+type Service struct {
+	log zerolog.Logger
+}
 
 // CaCert is a context tag for the CA certificate.
 type CACert struct{}
@@ -61,9 +63,6 @@ type MIMEType struct{}
 // Body is a context tag for the request body.
 type Body struct{}
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new file confidant.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -72,12 +71,14 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "confidant").Str("impl", "http").Logger()
+	log := zerologger.With().Str("service", "confidant").Str("impl", "http").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
-	s := &Service{}
+	s := &Service{
+		log: log,
+	}
 
 	return s, nil
 }
@@ -96,7 +97,7 @@ func (s *Service) Fetch(ctx context.Context, url *url.URL) ([]byte, error) {
 		MinVersion: tls.VersionTLS13,
 	}
 	if caCertExists {
-		log.Trace().Msg("Adding CA certificate")
+		s.log.Trace().Msg("Adding CA certificate")
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
 		tlsConfig.RootCAs = caCertPool
@@ -105,7 +106,7 @@ func (s *Service) Fetch(ctx context.Context, url *url.URL) ([]byte, error) {
 		return nil, errors.New("both or neither of client certificate and client key must be specified")
 	}
 	if clientCertExists {
-		log.Trace().Msg("Adding client certificate")
+		s.log.Trace().Msg("Adding client certificate")
 		cert, err := tls.X509KeyPair(clientCert, clientKey)
 		if err != nil {
 			return nil, errors.New("invalid client certificate or key")
@@ -133,7 +134,7 @@ func (s *Service) Fetch(ctx context.Context, url *url.URL) ([]byte, error) {
 
 	req, err := http.NewRequestWithContext(ctx, httpMethod, url.String(), bodyReader)
 	if err != nil {
-		log.Debug().Err(err).Msg("Failed to create request")
+		s.log.Debug().Err(err).Msg("Failed to create request")
 		return nil, majordomo.ErrNotFound
 	}
 
@@ -145,24 +146,24 @@ func (s *Service) Fetch(ctx context.Context, url *url.URL) ([]byte, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Debug().Msg("Failed to call endpoint")
+		s.log.Debug().Msg("Failed to call endpoint")
 		return nil, majordomo.ErrNotFound
 	}
 	if resp == nil {
-		log.Debug().Msg("No body returned for endpoint")
+		s.log.Debug().Msg("No body returned for endpoint")
 		return nil, majordomo.ErrNotFound
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if closeErr := resp.Body.Close(); closeErr != nil {
-		log.Debug().Err(closeErr).Msg("Response close() returned an error")
+		s.log.Debug().Err(closeErr).Msg("Response close() returned an error")
 	}
 	if err != nil {
-		log.Debug().Err(err).Msg("Failed to read response")
+		s.log.Debug().Err(err).Msg("Failed to read response")
 		return nil, majordomo.ErrNotFound
 	}
 	if len(data) == 0 {
-		log.Debug().Err(err).Msg("No data in response")
+		s.log.Debug().Err(err).Msg("No data in response")
 		return nil, majordomo.ErrNotFound
 	}
 	// Because we are using our own client for this call we close it here to avoid connection leaks.
@@ -170,7 +171,7 @@ func (s *Service) Fetch(ctx context.Context, url *url.URL) ([]byte, error) {
 
 	statusFamily := resp.StatusCode / 100
 	if statusFamily != 2 {
-		log.Debug().Int("status_code", resp.StatusCode).Str("data", string(data)).Msg("Request failed")
+		s.log.Debug().Int("status_code", resp.StatusCode).Str("data", string(data)).Msg("Request failed")
 		return nil, majordomo.ErrNotFound
 	}
 
