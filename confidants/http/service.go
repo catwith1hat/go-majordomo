@@ -42,7 +42,8 @@ import (
 // - MIMEType the MIME type for request and response, as a string (e.g. application/json)
 // - Body the request body, as a byte slice
 type Service struct {
-	log zerolog.Logger
+	log       zerolog.Logger
+	defaultCA []byte
 }
 
 // CaCert is a context tag for the CA certificate.
@@ -77,7 +78,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		log: log,
+		log:       log,
+		defaultCA: nil,
 	}
 
 	return s, nil
@@ -88,9 +90,20 @@ func (s *Service) SupportedURLSchemes(ctx context.Context) ([]string, error) {
 	return []string{"http", "https"}, nil
 }
 
+// Set default CA for requests
+func (s *Service) SetDefaultCaPemForRequests(caPEMBlock []byte) {
+	s.defaultCA = []byte(caPEMBlock)
+}
+
 // Fetch fetches a value given its https URL.
 func (s *Service) Fetch(ctx context.Context, url *url.URL) ([]byte, error) {
-	caCert, caCertExists := ctx.Value(&CACert{}).([]byte)
+	var caCert []byte
+	var caCertExists bool
+	caCert, caCertExists = ctx.Value(&CACert{}).([]byte)
+	if !caCertExists && (s.defaultCA != nil) {
+		caCert = s.defaultCA
+		caCertExists = true
+	}
 	clientCert, clientCertExists := ctx.Value(&ClientCert{}).([]byte)
 	clientKey, clientKeyExists := ctx.Value(&ClientKey{}).([]byte)
 	tlsConfig := &tls.Config{
