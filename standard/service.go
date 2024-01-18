@@ -78,8 +78,14 @@ func (s *Service) Fetch(ctx context.Context, req string) ([]byte, error) {
 		// Empty req is never found.
 		return nil, majordomo.ErrNotFound
 	}
+
 	if !strings.Contains(req, "://") {
+		log.Warn().Msg("Majordomo URL used as plain-value without prefixing it with 'data:'. Please add the 'data:' if short-cutting is intended, as this prefix will be required in future release of Majordomo.")
 		return []byte(req), nil
+	}
+
+	if strings.HasPrefix(req, "data:") {
+		return []byte(req[len("data:"):]), nil
 	}
 
 	url, err := url.Parse(req)
