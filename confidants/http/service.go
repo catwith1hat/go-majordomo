@@ -89,50 +89,6 @@ func (s *Service) SupportedURLSchemes(ctx context.Context) ([]string, error) {
 
 // Fetch fetches a value given its https URL.
 func (s *Service) Fetch(ctx context.Context, url *url.URL) ([]byte, error) {
-	_, clientCertExists := ctx.Value(&ClientCert{}).([]byte)
-	_, httpMethodExists := ctx.Value(&HTTPMethod{}).(string)
-	_, mimeTypeExists := ctx.Value(&MIMEType{}).(string)
-	_, bodyExists := ctx.Value(&Body{}).([]byte)
-	if clientCertExists || httpMethodExists || mimeTypeExists || bodyExists {
-		return s.fetchWithOptions(ctx, url)
-	}
-	return s.fetch(ctx, url)
-}
-
-func (s *Service) fetch(ctx context.Context, url *url.URL) ([]byte, error) {
-	resp, err := http.Get(url.String())
-	if err != nil {
-		log.Debug().Err(err).Msg("Failed to call endpoint")
-		return nil, majordomo.ErrNotFound
-	}
-	if resp == nil {
-		log.Debug().Err(err).Msg("No body returned for endpoint")
-		return nil, majordomo.ErrNotFound
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if closeErr := resp.Body.Close(); closeErr != nil {
-		log.Debug().Err(closeErr).Msg("Response close() returned an error")
-	}
-	if err != nil {
-		log.Debug().Err(err).Msg("Failed to read response")
-		return nil, majordomo.ErrNotFound
-	}
-	if len(data) == 0 {
-		log.Debug().Err(err).Msg("No data in response")
-		return nil, majordomo.ErrNotFound
-	}
-
-	statusFamily := resp.StatusCode / 100
-	if statusFamily != 2 {
-		log.Debug().Int("status_code", resp.StatusCode).Str("data", string(data)).Msg("Request failed")
-		return nil, majordomo.ErrNotFound
-	}
-
-	return data, nil
-}
-
-func (s *Service) fetchWithOptions(ctx context.Context, url *url.URL) ([]byte, error) {
 	caCert, caCertExists := ctx.Value(&CACert{}).([]byte)
 	clientCert, clientCertExists := ctx.Value(&ClientCert{}).([]byte)
 	clientKey, clientKeyExists := ctx.Value(&ClientKey{}).([]byte)
